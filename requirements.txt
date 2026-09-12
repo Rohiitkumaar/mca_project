@@ -2,6 +2,8 @@ langchain
 langchain-google-genai
 langchain-community
 langchain-text-splitters
-dotenv
+python-dotenv
 pypdf
 streamlit
+chromadb
+langchain-chroma
