@@ -15,7 +15,7 @@ from core.vectorstore import (
 def render_admin_login():
     """Renders the admin login interface."""
     st.subheader("🔒 Admin Authentication")
-    st.markdown("Please log in to manage the PDF knowledge base.")
+    st.markdown("Please log in to manage the knowledge base.")
 
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:

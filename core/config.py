@@ -4,6 +4,24 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+from langchain_core.embeddings import Embeddings
+from chromadb.utils import embedding_functions
+
+class LocalEmbeddings(Embeddings):
+    """Fast, local, offline embedding model with zero API limits."""
+    def __init__(self):
+        self._ef = embedding_functions.DefaultEmbeddingFunction()
+    
+    def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        return [list(map(float, vec)) for vec in self._ef(texts)]
+    
+    def embed_query(self, text: str) -> list[float]:
+        return [float(x) for x in self._ef([text])[0]]
+
+def get_embeddings():
+    return LocalEmbeddings()
+
+
 # Streamlit secrets helper (if running inside Streamlit)
 def get_secret(key: str, default=None):
     try:
@@ -33,15 +51,16 @@ ADMIN_USERNAME = get_secret("ADMIN_USERNAME", "admin")
 ADMIN_PASSWORD = get_secret("ADMIN_PASSWORD", "admin123")
 
 # Model configurations
-EMBEDDING_MODEL_NAME = "gemini-embedding-2-preview"
+# EMBEDDING_MODEL_NAME = "gemini-embedding-2-preview"
+EMBEDDING_MODEL_NAME = "models/gemini-embedding-001"
 LLM_MODEL_NAME = "gemini-3.5-flash-lite"
 
-def get_embeddings():
-    from langchain_google_genai import GoogleGenerativeAIEmbeddings
-    return GoogleGenerativeAIEmbeddings(
-        model=EMBEDDING_MODEL_NAME, 
-        google_api_key=GOOGLE_API_KEY
-    )
+# def get_embeddings():
+#     from langchain_google_genai import GoogleGenerativeAIEmbeddings
+#     return GoogleGenerativeAIEmbeddings(
+#         model=EMBEDDING_MODEL_NAME, 
+#         google_api_key=GOOGLE_API_KEY
+#     )
 
 def get_llm():
     from langchain_google_genai import ChatGoogleGenerativeAI

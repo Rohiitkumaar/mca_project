@@ -2,44 +2,54 @@ import streamlit as st
 from core.qa_engine import query_knowledge_base
 
 
+def render_source_item(src: dict) -> str:
+    """Helper to format source citation with rank indicator."""
+    rank = src.get("rank", 1)
+    filename = src.get("source", "Document")
+    page = src.get("page", 1)
+    
+    if src.get("is_best_match") or rank == 1:
+        return f"🏆 **Best Match (Rank #1)**: `{filename}` (Page {page})"
+    elif rank == 2:
+        return f"🥈 **Rank #2**: `{filename}` (Page {page})"
+    elif rank == 3:
+        return f"🥉 **Rank #3**: `{filename}` (Page {page})"
+    else:
+        return f"📄 **Rank #{rank}**: `{filename}` (Page {page})"
+
+
 def render_user_view():
-    """Renders the User Chat interface showing only clean PDF filename and page number for sources."""
-    # Initialize conversation state
+    """Renders the User Chat interface showing ranked PDF sources with best matches first."""
+
     if "messages" not in st.session_state:
         st.session_state.messages = []
 
-    # Render previous conversation history
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
             if message.get("sources"):
-                with st.expander("📌 Sources", expanded=False):
+                with st.expander("📌 Sources (Ranked by Best Match)", expanded=False):
                     for src in message["sources"]:
-                        st.markdown(f"📄 `{src['source']}` (Page {src['page']})")
+                        st.markdown(render_source_item(src))
 
-    # Chat input
     query = st.chat_input("Ask a question...")
     if query:
-        # Display user message
         with st.chat_message("user"):
             st.markdown(query)
         st.session_state.messages.append({"role": "user", "content": query})
 
-        # Generate answer via QA engine
         with st.spinner("Thinking & generating answer..."):
             result = query_knowledge_base(query)
             answer = result["answer"]
             sources = result.get("sources", [])
 
-        # Display AI message with only filename and page number
         with st.chat_message("ai"):
             st.markdown(answer)
             if sources:
-                with st.expander("📌 Sources", expanded=False):
+                with st.expander("📌 Sources (Ranked by Best Match)", expanded=False):
                     for src in sources:
-                        st.markdown(f"📄 `{src['source']}` (Page {src['page']})")
+                        st.markdown(render_source_item(src))
 
-        # Save to history
         st.session_state.messages.append({
             "role": "ai",
             "content": answer,

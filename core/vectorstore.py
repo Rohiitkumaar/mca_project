@@ -10,6 +10,7 @@ from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from core.config import CHROMA_PATH, DOCUMENTS_DIR, get_embeddings
+import time
 
 COLLECTION_NAME = "langchain"
 
@@ -90,8 +91,10 @@ def get_total_chunks() -> int:
         return 0
 
 
+from langchain_core.documents import Document
+
 def index_pdf(file_bytes: bytes, filename: str) -> int:
-    """Saves PDF to documents directory, splits text, tags with source metadata, and persists to ChromaDB."""
+    """Saves PDF to documents directory, builds continuous cross-page text stream, splits with overlap, and persists to ChromaDB."""
     clean_filename = os.path.basename(filename)
     file_path = os.path.join(DOCUMENTS_DIR, clean_filename)
 
@@ -114,17 +117,73 @@ def index_pdf(file_bytes: bytes, filename: str) -> int:
     if not docs:
         return 0
 
-    # 4. Split into chunks
-    splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
-    chunks = splitter.split_documents(docs)
+    # 4. Construct continuous text stream with exact page boundary mapping
+    full_text = ""
+    page_spans = []  # (start_char_idx, end_char_idx, page_number)
 
-    # 5. Attach consistent source metadata
-    for i, chunk in enumerate(chunks):
-        chunk.metadata["source"] = clean_filename
-        chunk.metadata["filename"] = clean_filename
-        chunk.metadata["chunk_id"] = i
+    for i, page_doc in enumerate(docs):
+        page_num = page_doc.metadata.get("page", i) + 1  # 1-indexed page number
+        raw_page_content = page_doc.page_content or ""
+        
+        # Add clean page header tag to keep natural document structure
+        start_idx = len(full_text)
+        if full_text:
+            full_text += "\n\n"
+            start_idx = len(full_text)
+        
+        full_text += f"--- Page {page_num} ---\n{raw_page_content.strip()}"
+        end_idx = len(full_text)
+        page_spans.append((start_idx, end_idx, page_num))
 
-    # 6. Add to Chroma vector database
+    # 5. Split continuous text across page boundaries with generous overlap
+    splitter = RecursiveCharacterTextSplitter(
+        chunk_size=1200,
+        chunk_overlap=300,
+        separators=["\n\n", "\n", ". ", "? ", "! ", "; ", " ", ""]
+    )
+    text_chunks = splitter.split_text(full_text)
+    if not text_chunks:
+        return 0
+
+    # 6. Map each chunk back to its spanning page(s) and attach metadata
+    search_cursor = 0
+    chunks: List[Document] = []
+
+    for i, chunk_text in enumerate(text_chunks):
+        pos = full_text.find(chunk_text, search_cursor)
+        if pos == -1:
+            pos = full_text.find(chunk_text)
+        
+        if pos != -1:
+            search_cursor = pos
+            chunk_end = pos + len(chunk_text)
+            # Find all pages this chunk overlaps with
+            overlapping_pages = [
+                p_num for (p_start, p_end, p_num) in page_spans
+                if max(pos, p_start) < min(chunk_end, p_end)
+            ]
+            primary_page = overlapping_pages[0] if overlapping_pages else 1
+            if len(overlapping_pages) > 1 and overlapping_pages[0] != overlapping_pages[-1]:
+                page_label = f"{overlapping_pages[0]}-{overlapping_pages[-1]}"
+            else:
+                page_label = str(primary_page)
+        else:
+            primary_page = 1
+            page_label = "1"
+
+        doc = Document(
+            page_content=chunk_text,
+            metadata={
+                "source": clean_filename,
+                "filename": clean_filename,
+                "chunk_id": i,
+                "page": primary_page,
+                "page_label": page_label
+            }
+        )
+        chunks.append(doc)
+
+    # 7. Add to Chroma vector database
     vector_db = get_vector_store()
     vector_db.add_documents(chunks)
 

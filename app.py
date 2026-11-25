@@ -5,7 +5,7 @@ from views.admin_view import render_admin_view
 
 # Streamlit Page Setup (No sidebar needed)
 st.set_page_config(
-    page_title="PDF Knowledge Assistant",
+    page_title="University Knowledge Assistant",
     page_icon="📚",
     layout="wide",
     initial_sidebar_state="collapsed"
@@ -27,7 +27,7 @@ if st.session_state.current_view == "user":
     col_title, col_clear, col_admin = st.columns([7, 1.2, 1.1])
 
     with col_title:
-        st.subheader("💬 PDF Knowledge Assistant")
+        st.subheader("💬 Your University Assistant")
         st.caption("Ask questions and get answers directly from the knowledge base.")
 
     with col_clear:
